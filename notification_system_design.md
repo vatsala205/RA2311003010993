@@ -149,3 +149,15 @@ Pagination is mandatory so the API never scans and returns an unbounded history.
 Lazy loading helps the client fetch only the first screen initially and request older notifications on demand. This improves perceived speed, but users may see incomplete history until they scroll or request more data.
 
 Push updates through WebSocket or Server-Sent Events reduce polling load and improve freshness. The tradeoff is operational complexity because persistent connections require connection state management, retry handling, and horizontal scaling support.
+
+## Stage 5: System Design Fix
+
+The wrong design is to write a notification row and then send email synchronously in the same request path for every user. That couples a fast database action to a slow and failure-prone external dependency, which increases latency and can block the whole batch.
+
+The fix is to separate responsibilities:
+
+1. The API writes the notification record quickly.
+2. The API publishes a job to an async queue such as BullMQ, RabbitMQ, or Kafka.
+3. Background workers consume the queue and send email, push, or SMS independently.
+
+This design keeps request latency low, supports retries without duplicating the database write, and allows worker counts to scale separately from the API tier. DB write success should mean the notification is persisted; email sending success should be tracked as a separate asynchronous delivery concern.
