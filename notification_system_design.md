@@ -119,3 +119,23 @@ CREATE TABLE notifications (
 The table is centered on fast per-student reads, so `student_id`, `is_read`, and `created_at` should be indexed based on query patterns instead of indexing every column blindly. `type` is useful for filtering and analytics, but it should only be included in indexes when real filters justify it.
 
 For scaling, PostgreSQL read replicas can serve read-heavy inbox queries while the primary handles writes. If the table grows to tens of millions of rows, time-based partitioning on `created_at` keeps recent partitions hot and makes retention cleanup cheaper. If the application becomes multi-tenant at large scale, partitioning by a hash of `student_id` can spread write pressure more evenly.
+
+## Stage 3: Query Optimization
+
+```sql
+CREATE INDEX idx_notifications_student_read_created
+ON notifications (student_id, is_read, created_at DESC);
+```
+
+This composite index matches the most common inbox query shape: fetch one student's notifications, usually filtered by read state, ordered by newest first. Indexing every column is a poor choice because each extra index increases write cost, storage, vacuum overhead, and planner complexity. Indexes should reflect real filters and sort patterns rather than theoretical access paths.
+
+Placement notifications from the last 7 days can be fetched with:
+
+```sql
+SELECT id, student_id, type, message, is_read, created_at
+FROM notifications
+WHERE student_id = 'RA2311003010993'
+  AND type = 'Placement'
+  AND created_at >= NOW() - INTERVAL '7 days'
+ORDER BY created_at DESC;
+```
