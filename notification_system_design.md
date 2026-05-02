@@ -139,3 +139,13 @@ WHERE student_id = 'RA2311003010993'
   AND created_at >= NOW() - INTERVAL '7 days'
 ORDER BY created_at DESC;
 ```
+
+## Stage 4: Performance Solutions
+
+Redis can cache the first page of unread notifications per student, plus lightweight counters such as unread totals, which removes repeated pressure from PostgreSQL during high-traffic periods. The tradeoff is cache invalidation complexity because every create, mark-read, and delete event must keep the cache consistent.
+
+Pagination is mandatory so the API never scans and returns an unbounded history. Offset pagination is easy to implement, but cursor pagination scales better for deep scrolling because it avoids large skips on heavily populated inboxes.
+
+Lazy loading helps the client fetch only the first screen initially and request older notifications on demand. This improves perceived speed, but users may see incomplete history until they scroll or request more data.
+
+Push updates through WebSocket or Server-Sent Events reduce polling load and improve freshness. The tradeoff is operational complexity because persistent connections require connection state management, retry handling, and horizontal scaling support.
