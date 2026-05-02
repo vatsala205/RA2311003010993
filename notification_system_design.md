@@ -102,3 +102,20 @@ Response:
 ### Real-Time Strategy
 
 WebSocket is the primary choice because notifications are event-driven and the server can push new items immediately after creation. Polling can be retained as a fallback for clients that cannot keep a socket open, but it adds repeated read load and higher latency compared with server push.
+
+## Stage 2: Database Schema Design
+
+```sql
+CREATE TABLE notifications (
+  id UUID PRIMARY KEY,
+  student_id VARCHAR(20) NOT NULL,
+  type VARCHAR(20) NOT NULL,
+  message TEXT NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+The table is centered on fast per-student reads, so `student_id`, `is_read`, and `created_at` should be indexed based on query patterns instead of indexing every column blindly. `type` is useful for filtering and analytics, but it should only be included in indexes when real filters justify it.
+
+For scaling, PostgreSQL read replicas can serve read-heavy inbox queries while the primary handles writes. If the table grows to tens of millions of rows, time-based partitioning on `created_at` keeps recent partitions hot and makes retention cleanup cheaper. If the application becomes multi-tenant at large scale, partitioning by a hash of `student_id` can spread write pressure more evenly.
